@@ -31,7 +31,8 @@ import numpy as np
 # pip install opencv-python numpy streamlit
 #
 # 선택 설치 (대사 분석)
-# pip install faster-whisper
+# pip i([github.com](https://github.com/yt-dlp/yt-dlp?tab=readme-ov-file&utm_source=chatgpt.com))영상 다운로드 기능
+# pip install yt-dlp
 #
 # ffmpeg 설치 후 PATH 등록 필요
 # 확인:
@@ -163,6 +164,53 @@ def sec_to_hhmmss(sec: float) -> str:
     m = (sec % 3600) // 60
     s = sec % 60
     return f"{h:02d}:{m:02d}:{s:02d}"
+
+
+def sanitize_filename(name: str) -> str:
+    name = re.sub(r'[\\/:*?"<>|]+', '_', name)
+    return name.strip() or 'downloaded_video'
+
+
+def download_video_from_url(video_url: str, output_dir: str) -> str:
+    try:
+        import yt_dlp
+    except Exception as e:
+        raise RuntimeError("yt-dlp가 설치되지 않았습니다. pip install yt-dlp 후 다시 시도하세요.") from e
+
+    os.makedirs(output_dir, exist_ok=True)
+    outtmpl = os.path.join(output_dir, '%(title).120s.%(ext)s')
+
+    ydl_opts = {
+        'outtmpl': outtmpl,
+        'format': 'mp4/bv*+ba/b',
+        'merge_output_format': 'mp4',
+        'noplaylist': True,
+        'quiet': True,
+        'no_warnings': True,
+    }
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(video_url, download=True)
+        if info is None:
+            raise RuntimeError('URL에서 영상 정보를 가져오지 못했습니다.')
+
+        if 'entries' in info and info['entries']:
+            info = info['entries'][0]
+
+        downloaded_path = ydl.prepare_filename(info)
+        base_no_ext = os.path.splitext(downloaded_path)[0]
+        merged_mp4 = base_no_ext + '.mp4'
+        if os.path.exists(merged_mp4):
+            return merged_mp4
+        if os.path.exists(downloaded_path):
+            return downloaded_path
+
+        title = sanitize_filename(info.get('title', 'downloaded_video'))
+        for file_name in os.listdir(output_dir):
+            if file_name.startswith(title):
+                return os.path.join(output_dir, file_name)
+
+    raise RuntimeError('영상 다운로드는 완료됐지만 결과 파일을 찾지 못했습니다.')
 
 
 # =========================
@@ -605,7 +653,14 @@ def run_streamlit_app() -> None:
     st.title("🎬 Video Highlight AI")
     st.caption("하이라이트 추출 + 자막 분석 + 쇼츠 생성 + exe용 엔진")
 
-    uploaded = st.file_uploader("영상 업로드", type=["mp4", "mov", "avi", "mkv"])
+    source_type = st.radio("입력 방식", ["파일 업로드", "영상 URL"], horizontal=True)
+
+    uploaded = None
+    video_url = ""
+    if source_type == "파일 업로드":
+        uploaded = st.file_uploader("영상 업로드", type=["mp4", "mov", "avi", "mkv"])
+    else:
+        video_url = st.text_input("영상 URL 입력", placeholder="https://...")
 
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -623,16 +678,25 @@ def run_streamlit_app() -> None:
 
     if uploaded is not None:
         st.video(uploaded)
+    elif source_type == "영상 URL" and video_url.strip():
+        st.caption("URL 영상은 서버에서 먼저 다운로드한 뒤 분석합니다.")
 
     if st.button("하이라이트 만들기", type="primary"):
-        if uploaded is None:
+        if source_type == "파일 업로드" and uploaded is None:
             st.error("먼저 영상을 업로드하세요.")
+            return
+        if source_type == "영상 URL" and not video_url.strip():
+            st.error("영상 URL을 입력하세요.")
             return
 
         with tempfile.TemporaryDirectory() as td:
-            input_path = os.path.join(td, uploaded.name)
-            with open(input_path, "wb") as f:
-                f.write(uploaded.read())
+            if source_type == "파일 업로드":
+                input_path = os.path.join(td, uploaded.name)
+                with open(input_path, "wb") as f:
+                    f.write(uploaded.read())
+            else:
+                with st.spinner("URL에서 영상을 다운로드 중입니다..."):
+                    input_path = download_video_from_url(video_url.strip(), td)
 
             output_dir = os.path.join(td, "outputs")
             os.makedirs(output_dir, exist_ok=True)
@@ -776,4 +840,4 @@ def main():
 
 
 if __name__ == "__main__":
-    run_streamlit_app()
+    main()
