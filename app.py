@@ -182,11 +182,13 @@ def download_video_from_url(video_url: str, output_dir: str) -> str:
 
     ydl_opts = {
         'outtmpl': outtmpl,
-        'format': 'mp4/bv*+ba/b',
-        'merge_output_format': 'mp4',
-        'noplaylist': True,
-        'quiet': True,
-        'no_warnings': True,
+    'format': 'bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b',
+    'merge_output_format': 'mp4',
+    'noplaylist': True,
+    'quiet': False,
+    'no_warnings': False,
+    'verbose': True,
+    'retries': 3,
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
