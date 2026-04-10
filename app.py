@@ -676,20 +676,20 @@ def run_streamlit_app() -> None:
                 with open(input_path, "wb") as f:
                     f.write(uploaded.read())
             else:
-                try:
-                    url = video_url.strip()
+               url = video_url.strip()
 
-# 유튜브만 허용
-if not is_youtube_url(url):
-    st.error("❌ 유튜브 URL만 지원합니다.")
-    return
+            # 유튜브 체크 (try 밖에 둬야 함)
+            if not is_youtube_url(url):
+                st.error("❌ 유튜브 URL만 지원합니다.")
+                return
 
-try:
-    with st.spinner("유튜브 영상 다운로드 중..."):
-        input_path = download_video_from_url(url, td)
-except Exception as e:
-    st.error(str(e))
-    return
+            # 다운로드만 try로 감싸기 
+            try:
+                with st.spinner("유튜브 영상 다운로드 중..."):
+                    input_path = download_video_from_url(url, td)
+            except Exception as e:
+                st.error(str(e))
+                return
                
                 
 
