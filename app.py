@@ -110,8 +110,6 @@ def run_cmd(cmd: List[str]) -> subprocess.CompletedProcess:
         )
     return result
 
-def is_youtube_url(url):
-    return "youtube.com" in url or "youtu.be" in url
 
 def ffprobe_duration(path: str) -> float:
     result = run_cmd([
@@ -676,20 +674,22 @@ def run_streamlit_app() -> None:
                 with open(input_path, "wb") as f:
                     f.write(uploaded.read())
             else:
-               url = video_url.strip()
+                url = video_url.strip()
 
-            # 유튜브 체크 (try 밖에 둬야 함)
-            if not is_youtube_url(url):
-                st.error("❌ 유튜브 URL만 지원합니다.")
-                return
+                if not is_youtube_url(url):
+                    st.error("❌ 유튜브 URL만 지원합니다.")
+                    return
 
-            # 다운로드만 try로 감싸기 
-            try:
-                with st.spinner("유튜브 영상 다운로드 중..."):
-                    input_path = download_video_from_url(url, td)
-            except Exception as e:
-                st.error(str(e))
-                return
+                try:
+                    with st.spinner("유튜브 영상 다운로드 중..."):
+                        input_path = download_video_from_url(url, td)
+                except Exception as e:
+                    st.error(str(e))
+                    return
+
+            output_dir = os.path.join(td, "outputs")
+            os.makedirs(output_dir, exist_ok=True)
+            output_path = os.path.join(output_dir, "highlight.mp4")
                
                 
 
