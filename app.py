@@ -638,7 +638,8 @@ def run_streamlit_app() -> None:
     if source_type == "파일 업로드":
         uploaded = st.file_uploader("영상 업로드", type=["mp4", "mov", "avi", "mkv"])
     else:
-        video_url = st.text_input("영상 URL 입력", placeholder="https://...")
+        video_url = st.text_input("영상 URL 입력 (베타 ⚠️)", placeholder="https://...")
+        st.caption("👉 URL 기능은 베타입니다. 일부 영상은 다운로드가 안 될 수 있습니다.")
         st.caption("👉 유튜브 URL만 지원합니다 (youtube.com / youtu.be)")
 
     col1, col2, col3 = st.columns(3)
