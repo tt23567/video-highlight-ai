@@ -110,6 +110,8 @@ def run_cmd(cmd: List[str]) -> subprocess.CompletedProcess:
         )
     return result
 
+def is_youtube_url(url):
+    return "youtube.com" in url or "youtu.be" in url
 
 def ffprobe_duration(path: str) -> float:
     result = run_cmd([
@@ -148,6 +150,11 @@ def sanitize_filename(name: str) -> str:
     name = re.sub(r'[\\/:*?"<>|]+', '_', name)
     return name.strip() or 'downloaded_video'
 
+def is_youtube_url(url: str) -> bool:
+    return (
+        "youtube.com" in url.lower()
+        or "youtu.be" in url.lower()
+    )
 
 def download_video_from_url(video_url: str, output_dir: str) -> str:
     try:
@@ -634,6 +641,7 @@ def run_streamlit_app() -> None:
         uploaded = st.file_uploader("영상 업로드", type=["mp4", "mov", "avi", "mkv"])
     else:
         video_url = st.text_input("영상 URL 입력", placeholder="https://...")
+        st.caption("👉 유튜브 URL만 지원합니다 (youtube.com / youtu.be)")
 
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -669,11 +677,21 @@ def run_streamlit_app() -> None:
                     f.write(uploaded.read())
             else:
                 try:
-                    with st.spinner("URL에서 영상을 다운로드 중입니다..."):
-                        input_path = download_video_from_url(video_url.strip(), td)
-                except Exception as e:
-                    st.error(str(e))
-                    return
+                    url = video_url.strip()
+
+# 유튜브만 허용
+if not is_youtube_url(url):
+    st.error("❌ 유튜브 URL만 지원합니다.")
+    return
+
+try:
+    with st.spinner("유튜브 영상 다운로드 중..."):
+        input_path = download_video_from_url(url, td)
+except Exception as e:
+    st.error(str(e))
+    return
+               
+                
 
             output_dir = os.path.join(td, "outputs")
             os.makedirs(output_dir, exist_ok=True)
