@@ -31,7 +31,9 @@ import numpy as np
 # pip install opencv-python numpy streamlit
 #
 # 선택 설치 (대사 분석)
-# pip i([github.com](https://github.com/yt-dlp/yt-dlp?tab=readme-ov-file&utm_source=chatgpt.com))영상 다운로드 기능
+# pip install faster-whisper
+#
+# URL 영상 다운로드 기능
 # pip install yt-dlp
 #
 # ffmpeg 설치 후 PATH 등록 필요
@@ -42,36 +44,16 @@ import numpy as np
 # ------------------------------------------------------------
 # 실행 방법
 # 1) GUI 실행
-#    streamlit run video_highlight_ai_all_in_one.py
+#    streamlit run app.py
 #
 # 2) 콘솔 실행
-#    python video_highlight_ai_all_in_one.py --input input.mp4 --output highlight.mp4
+#    python app.py --input input.mp4 --output highlight.mp4
 #
 # 3) 쇼츠 생성 포함
-#    python video_highlight_ai_all_in_one.py --input input.mp4 --output highlight.mp4 --make-shorts
+#    python app.py --input input.mp4 --output highlight.mp4 --make-shorts
 #
 # 4) 자막 분석 포함
-#    python video_highlight_ai_all_in_one.py --input input.mp4 --output highlight.mp4 --use-whisper
-#
-# 5) exe 만들기
-#    pip install pyinstaller
-#    pyinstaller --onefile video_highlight_ai_all_in_one.py
-#
-# GUI exe 예시 (streamlit 앱은 별도 실행형으로 묶기 까다로워서
-# 실사용은 콘솔 엔진 exe + bat 실행 방식 추천)
-#
-# ------------------------------------------------------------
-# 파일 구조 예시
-#   project/
-#     video_highlight_ai_all_in_one.py
-#     input.mp4
-#     outputs/
-#
-# ------------------------------------------------------------
-# 참고
-# - Whisper는 CPU에서 느릴 수 있음
-# - faster-whisper 설치가 안 되면 자동으로 비활성화됨
-# - 긴 영상은 처리 시간이 걸릴 수 있음
+#    python app.py --input input.mp4 --output highlight.mp4 --use-whisper
 # ============================================================
 
 
@@ -129,7 +111,6 @@ def run_cmd(cmd: List[str]) -> subprocess.CompletedProcess:
     return result
 
 
-
 def ffprobe_duration(path: str) -> float:
     result = run_cmd([
         "ffprobe", "-v", "error",
@@ -138,7 +119,6 @@ def ffprobe_duration(path: str) -> float:
         path,
     ])
     return float(result.stdout.strip())
-
 
 
 def normalize_array(x: np.ndarray) -> np.ndarray:
@@ -152,10 +132,8 @@ def normalize_array(x: np.ndarray) -> np.ndarray:
     return (x - lo) / (hi - lo)
 
 
-
 def ensure_parent_dir(path: str) -> None:
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-
 
 
 def sec_to_hhmmss(sec: float) -> str:
@@ -175,44 +153,51 @@ def download_video_from_url(video_url: str, output_dir: str) -> str:
     try:
         import yt_dlp
     except Exception as e:
-        raise RuntimeError("yt-dlp가 설치되지 않았습니다. pip install yt-dlp 후 다시 시도하세요.") from e
+        raise RuntimeError("yt-dlp가 설치되지 않았습니다. requirements.txt에 yt-dlp를 추가하세요.") from e
 
     os.makedirs(output_dir, exist_ok=True)
     outtmpl = os.path.join(output_dir, '%(title).120s.%(ext)s')
 
     ydl_opts = {
         'outtmpl': outtmpl,
-    'format': 'bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b',
-    'merge_output_format': 'mp4',
-    'noplaylist': True,
-    'quiet': False,
-    'no_warnings': False,
-    'verbose': True,
-    'retries': 3,
+        'format': 'bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b',
+        'merge_output_format': 'mp4',
+        'noplaylist': True,
+        'quiet': False,
+        'no_warnings': False,
+        'verbose': True,
+        'retries': 3,
     }
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(video_url, download=True)
-        if info is None:
-            raise RuntimeError('URL에서 영상 정보를 가져오지 못했습니다.')
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(video_url, download=True)
 
-        if 'entries' in info and info['entries']:
-            info = info['entries'][0]
+            if info is None:
+                raise RuntimeError("URL에서 영상 정보를 가져오지 못했습니다.")
 
-        downloaded_path = ydl.prepare_filename(info)
-        base_no_ext = os.path.splitext(downloaded_path)[0]
-        merged_mp4 = base_no_ext + '.mp4'
-        if os.path.exists(merged_mp4):
-            return merged_mp4
-        if os.path.exists(downloaded_path):
-            return downloaded_path
+            if 'entries' in info and info['entries']:
+                info = info['entries'][0]
 
-        title = sanitize_filename(info.get('title', 'downloaded_video'))
-        for file_name in os.listdir(output_dir):
-            if file_name.startswith(title):
-                return os.path.join(output_dir, file_name)
+            downloaded_path = ydl.prepare_filename(info)
+            base_no_ext = os.path.splitext(downloaded_path)[0]
+            merged_mp4 = base_no_ext + '.mp4'
 
-    raise RuntimeError('영상 다운로드는 완료됐지만 결과 파일을 찾지 못했습니다.')
+            if os.path.exists(merged_mp4):
+                return merged_mp4
+            if os.path.exists(downloaded_path):
+                return downloaded_path
+
+        raise RuntimeError("다운로드는 됐지만 결과 파일을 찾지 못했습니다.")
+
+    except Exception as e:
+        print("yt-dlp error:", repr(e))
+
+        raise RuntimeError(
+            "❌ 이 URL 영상은 다운로드 실패\n\n"
+            "👉 유튜브/일부 사이트는 서버에서 차단될 수 있습니다.\n"
+            "👉 다른 URL을 사용하거나, 영상을 직접 업로드해 주세요."
+        ) from e
 
 
 # =========================
@@ -226,7 +211,6 @@ def extract_audio_wav(input_path: str, wav_path: str) -> None:
     ])
 
 
-
 def read_wav_pcm16_mono(wav_path: str) -> Tuple[np.ndarray, int]:
     with wave.open(wav_path, "rb") as wf:
         channels = wf.getnchannels()
@@ -238,7 +222,6 @@ def read_wav_pcm16_mono(wav_path: str) -> Tuple[np.ndarray, int]:
         raw = wf.readframes(nframes)
     audio = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
     return audio, framerate
-
 
 
 def audio_energy_per_window(input_path: str, duration: float, window_sec: float) -> np.ndarray:
@@ -332,18 +315,14 @@ def clean_text_score(text: str) -> float:
 
     score = 0.0
 
-    # 글자 수가 너무 짧지 않으면 가산점
     score += min(len(text) / 30.0, 1.0) * 0.35
 
-    # 감탄/의문/강조 표현
     if re.search(r"[!?！？]", text):
         score += 0.20
 
-    # 숫자/핵심 정보성 문장
     if re.search(r"\d", text):
         score += 0.10
 
-    # 강조 키워드 예시
     keywords = [
         "와", "대박", "진짜", "미쳤", "레전드", "중요", "핵심", "결정", "우승", "골",
         "킬", "성공", "실패", "역전", "최고", "끝", "바로", "드디어", "why", "wow",
@@ -354,7 +333,6 @@ def clean_text_score(text: str) -> float:
         score += 0.35
 
     return min(score, 1.0)
-
 
 
 def transcribe_with_whisper(input_path: str, model_name: str = "small") -> List[WhisperLine]:
@@ -380,7 +358,6 @@ def transcribe_with_whisper(input_path: str, model_name: str = "small") -> List[
             score=score,
         ))
     return results
-
 
 
 def speech_score_per_window(lines: List[WhisperLine], duration: float, window_sec: float) -> np.ndarray:
@@ -414,7 +391,6 @@ def score_windows(audio: np.ndarray, motion: np.ndarray, scene: np.ndarray, spee
     return normalize_array(score)
 
 
-
 def merge_segments(segments: List[Segment], gap: float) -> List[Segment]:
     if not segments:
         return []
@@ -432,7 +408,6 @@ def merge_segments(segments: List[Segment], gap: float) -> List[Segment]:
         else:
             merged.append(seg)
     return merged
-
 
 
 def pick_segments(scores: np.ndarray, cfg: Config, duration: float, speech_lines: Optional[List[WhisperLine]] = None) -> List[Segment]:
@@ -507,7 +482,6 @@ def write_concat_parts(input_path: str, segments: List[Segment], temp_dir: str) 
     return part_files
 
 
-
 def concat_parts(part_files: List[str], output_path: str, temp_dir: str) -> None:
     list_path = os.path.join(temp_dir, "concat.txt")
     with open(list_path, "w", encoding="utf-8") as f:
@@ -524,13 +498,11 @@ def concat_parts(part_files: List[str], output_path: str, temp_dir: str) -> None
     ])
 
 
-
 def create_highlight_video(input_path: str, output_path: str, segments: List[Segment]) -> None:
     ensure_parent_dir(output_path)
     with tempfile.TemporaryDirectory() as td:
         part_files = write_concat_parts(input_path, segments, td)
         concat_parts(part_files, output_path, td)
-
 
 
 def create_shorts_from_segments(input_path: str, output_dir: str, segments: List[Segment], shorts_count: int, shorts_duration: int, width: int, height: int) -> List[str]:
@@ -567,7 +539,6 @@ def create_shorts_from_segments(input_path: str, output_dir: str, segments: List
         outputs.append(out_path)
 
     return outputs
-
 
 
 def save_report(output_path: str, cfg: Config, segments: List[Segment], speech_lines: List[WhisperLine]) -> str:
@@ -653,7 +624,7 @@ def run_streamlit_app() -> None:
 
     st.set_page_config(page_title="Video Highlight AI", layout="wide")
     st.title("🎬 Video Highlight AI")
-    st.caption("하이라이트 추출 + 자막 분석 + 쇼츠 생성 + exe용 엔진")
+    st.caption("하이라이트 추출 + 자막 분석 + 쇼츠 생성 + URL 다운로드 지원")
 
     source_type = st.radio("입력 방식", ["파일 업로드", "영상 URL"], horizontal=True)
 
@@ -697,8 +668,12 @@ def run_streamlit_app() -> None:
                 with open(input_path, "wb") as f:
                     f.write(uploaded.read())
             else:
-                with st.spinner("URL에서 영상을 다운로드 중입니다..."):
-                    input_path = download_video_from_url(video_url.strip(), td)
+                try:
+                    with st.spinner("URL에서 영상을 다운로드 중입니다..."):
+                        input_path = download_video_from_url(video_url.strip(), td)
+                except Exception as e:
+                    st.error(str(e))
+                    return
 
             output_dir = os.path.join(td, "outputs")
             os.makedirs(output_dir, exist_ok=True)
@@ -805,9 +780,9 @@ def main():
     if not args.input or not args.output:
         print("입력/출력 경로가 없어서 GUI 실행 안내를 표시합니다.")
         print("GUI 실행:")
-        print("  streamlit run video_highlight_ai_all_in_one.py")
+        print("  streamlit run app.py")
         print("CLI 실행:")
-        print("  python video_highlight_ai_all_in_one.py --input input.mp4 --output outputs/highlight.mp4 --use-whisper --make-shorts")
+        print("  python app.py --input input.mp4 --output outputs/highlight.mp4 --use-whisper --make-shorts")
         return
 
     cfg = Config(
